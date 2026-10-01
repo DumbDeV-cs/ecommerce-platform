@@ -2205,7 +2205,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         label: const Text('Select Image from Device'),
                       ),
                       if (pickedImageBytes != null)
-                        const Text('Image Selected! ✅', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
+                        const Text('Image Selected! âœ…', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
                       else
                         const Text('No image chosen', style: TextStyle(color: Colors.grey)),
                     ],
@@ -2272,21 +2272,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  Widget _stat(String label, String value, Color color) => Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: color)),
-            ],
+  Widget _stat(String label, String value, Color color, IconData icon) => SizedBox(
+        width: 260,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.96, end: 1),
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+          builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withOpacity(0.12)),
+              boxShadow: [BoxShadow(color: color.withOpacity(0.08), blurRadius: 22, offset: const Offset(0, 8))],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(15)),
+                  child: Icon(icon, color: color),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: const TextStyle(color: Color(0xFF718071), fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 5),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: SlideTransition(
+                          position: Tween<Offset>(begin: const Offset(0, 0.18), end: Offset.zero).animate(animation), child: child)),
+                        child: Text(value, key: ValueKey(value), style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800, color: color)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -2298,10 +2324,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: kBrown,
-        foregroundColor: Colors.white,
-        title: const Text('Owner Dashboard - Rapti Nursery'),
+        backgroundColor: kCream,
+        foregroundColor: kDeepGreen,
+        elevation: 0,
+        title: const Text('Rapti Nursery', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
+          const Padding(padding: EdgeInsets.only(right: 8), child: Center(child: Text('OWNER', style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: kGreen)))),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
@@ -2325,29 +2353,50 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  _stat('Total Varieties', '${globalProducts.length}', kGreen),
-                  const SizedBox(width: 16),
-                  _stat('Total Stock Units', '$totalStock', kBrown),
-                ],
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(narrow ? 20 : 26),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFEAF2E5), Color(0xFFF8F7EF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('A little care goes a long way', style: TextStyle(color: kDeepGreen, fontSize: narrow ? 22 : 27, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  const Text('Keep your nursery thriving. Review stock and update your plant collection.', style: TextStyle(color: Color(0xFF617261), height: 1.45)),
+                ]),
               ),
-              const SizedBox(height: 26),
-              const Text('Manage Store Inventory',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kBrown)),
-              const SizedBox(height: 15),
+              const SizedBox(height: 18),
+              Wrap(spacing: 14, runSpacing: 14, children: [
+                _stat('Plant varieties', '${globalProducts.length}', kGreen, Icons.spa_outlined),
+                _stat('Units in stock', '$totalStock', kBrown, Icons.inventory_2_outlined),
+              ]),
+              const SizedBox(height: 28),
+              Row(children: [
+                const Expanded(child: Text('Your plants', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: kDeepGreen))),
+                Text('${globalProducts.length} listings', style: const TextStyle(color: Color(0xFF718071), fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 13),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.only(bottom: 90),
                   itemCount: globalProducts.length,
                   itemBuilder: (context, index) {
                     final plant = globalProducts[index];
-                    return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    final stockColor = plant.stock == 0 ? Colors.red.shade700 : plant.stock < 5 ? Colors.orange.shade800 : kGreen;
+                    return TweenAnimationBuilder<double>(
+                      key: ValueKey(plant.id),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: Duration(milliseconds: 280 + (math.min(index, 5) * 55)),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) => Opacity(opacity: value, child: Transform.translate(offset: Offset(0, 12 * (1 - value)), child: child)),
+                      child: Card(
+                      elevation: 0,
+                      color: Colors.white,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: Color(0xFFE8EDE5))),
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         child: Row(
                           children: [
                             ClipRRect(borderRadius: BorderRadius.circular(8), child: plantImage(plant, width: 64, height: 64)),
@@ -2356,20 +2405,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(plant.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  Text(plant.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF243B25))),
                                   const SizedBox(height: 4),
-                                  Text('${plant.category} | ${rs(plant.priceNpr)}',
-                                      style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                                  Text('${plant.category}  ?  ${rs(plant.priceNpr)}',
+                                      style: const TextStyle(color: Color(0xFF718071), fontSize: 13)),
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      const Text('Stock:', style: TextStyle(fontSize: 13)),
+                                      Text(plant.stock == 0 ? 'Out of stock' : plant.stock < 5 ? 'Low stock' : 'In stock', style: TextStyle(fontSize: 12, color: stockColor, fontWeight: FontWeight.w700)),
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
                                         icon: const Icon(Icons.remove_circle_outline, size: 20),
                                         onPressed: plant.stock > 0 ? () => setState(() => plant.stock--) : null,
                                       ),
-                                      Text('${plant.stock}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      AnimatedSwitcher(duration: const Duration(milliseconds: 180), child: Text('${plant.stock}', key: ValueKey(plant.stock), style: TextStyle(fontWeight: FontWeight.w800, color: stockColor))),
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
                                         icon: const Icon(Icons.add_circle_outline, size: 20),
@@ -2381,12 +2430,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
+                              style: IconButton.styleFrom(backgroundColor: const Color(0xFFFFF1EF)),
+                              icon: const Icon(Icons.delete_outline, color: Color(0xFFB34B3D)),
                               tooltip: 'Delete',
                               onPressed: () => _confirmDelete(index),
                             ),
                           ],
                         ),
+                      ),
                       ),
                     );
                   },

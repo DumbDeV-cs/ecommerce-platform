@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
@@ -15,8 +17,13 @@ const Color kDeepGreen = Color(0xFF1E3F1D);
 const Color kBrown = Color(0xFF8B5A2B);
 const Color kCream = Color(0xFFF9F6EE);
 const String kWhatsapp = '9779847831731';
-const String kAdminEmail = 'swetaacharya73@gmail.com';
-const String kAdminPass = 'prabeshhh';
+// Owner login is stored only as a salted SHA-256 hash (no plain email/password in the source).
+const String kAdminSalt = 'rapti-nursery-owner-v1';
+const String kAdminHash = '976c78942c3a7e29bf2625fd740e843856e4504c36160d1ffcf842281b58db0b';
+
+// Map / location
+const String kMapShortLink = 'https://maps.app.goo.gl/95ZzfG3VYN3i88q8A';
+const String kMapDirections = 'https://www.google.com/maps/dir/?api=1&destination=28.1250632,82.3191794';
 const List<String> kCategories = ['Fruit Saplings', 'Indoor Plants', 'Seeds', 'Flowering', 'Succulents'];
 
 /// Cart badge + scroll position are shared so any screen can react to them.
@@ -467,6 +474,98 @@ class FallingPainter extends CustomPainter {
   bool shouldRepaint(covariant FallingPainter old) => false;
 }
 
+/// Stylised map illustration with a bouncing location pin.
+class MapPainter extends CustomPainter {
+  final Animation<double> anim;
+  MapPainter(this.anim) : super(repaint: anim);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFE8F1DF));
+
+    // park blocks
+    final park = Paint()..color = const Color(0xFFCFE5BE);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.05, h * 0.10, w * 0.22, h * 0.28), const Radius.circular(14)), park);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.70, h * 0.58, w * 0.25, h * 0.30), const Radius.circular(14)), park);
+
+    // river
+    final river = Path()
+      ..moveTo(0, h * 0.78)
+      ..cubicTo(w * 0.25, h * 0.60, w * 0.45, h * 0.95, w * 0.70, h * 0.72)
+      ..cubicTo(w * 0.85, h * 0.60, w * 0.95, h * 0.70, w, h * 0.62);
+    canvas.drawPath(
+      river,
+      Paint()
+        ..color = const Color(0xFFAED6F1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 18
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // roads
+    final roadOuter = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 12
+      ..strokeCap = StrokeCap.round;
+    final roadInner = Paint()
+      ..color = const Color(0xFFF6E7B4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+    final roads = [
+      Path()
+        ..moveTo(0, h * 0.30)
+        ..quadraticBezierTo(w * 0.35, h * 0.20, w * 0.55, h * 0.45)
+        ..quadraticBezierTo(w * 0.75, h * 0.70, w, h * 0.50),
+      Path()
+        ..moveTo(w * 0.40, 0)
+        ..quadraticBezierTo(w * 0.45, h * 0.40, w * 0.55, h * 0.45)
+        ..quadraticBezierTo(w * 0.62, h * 0.70, w * 0.58, h),
+      Path()
+        ..moveTo(w * 0.05, h * 0.92)
+        ..lineTo(w * 0.35, h * 0.62)
+        ..lineTo(w * 0.55, h * 0.45),
+    ];
+    for (final r in roads) {
+      canvas.drawPath(r, roadOuter);
+      canvas.drawPath(r, roadInner);
+    }
+
+    // trees
+    final tree = Paint()..color = const Color(0xFF7CB342);
+    for (final o in [
+      Offset(w * 0.12, h * 0.20),
+      Offset(w * 0.18, h * 0.30),
+      Offset(w * 0.80, h * 0.70),
+      Offset(w * 0.86, h * 0.80),
+      Offset(w * 0.30, h * 0.80),
+    ]) {
+      canvas.drawCircle(o, 9, tree);
+    }
+
+    // pin (bounces)
+    final bounce = (math.sin(anim.value * 2 * math.pi * 10).abs()) * 10;
+    final c = Offset(w * 0.55, h * 0.45);
+    canvas.drawOval(
+      Rect.fromCenter(center: c.translate(0, 4), width: 26 - bounce * 0.4, height: 8),
+      Paint()..color = Colors.black26,
+    );
+    final top = c.translate(0, -34 - bounce);
+    final pin = Path()
+      ..moveTo(c.dx, c.dy - bounce)
+      ..cubicTo(c.dx - 26, c.dy - 26 - bounce, c.dx - 22, top.dy - 14, c.dx, top.dy - 14)
+      ..cubicTo(c.dx + 22, top.dy - 14, c.dx + 26, c.dy - 26 - bounce, c.dx, c.dy - bounce)
+      ..close();
+    canvas.drawPath(pin, Paint()..color = const Color(0xFFE53935));
+    canvas.drawCircle(Offset(c.dx, top.dy - 2), 7, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(covariant MapPainter old) => false;
+}
+
 class WavePainter extends CustomPainter {
   final Color color;
   WavePainter(this.color);
@@ -672,6 +771,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
   final TextEditingController _searchCtrl = TextEditingController();
   final GlobalKey _shopKey = GlobalKey();
   final GlobalKey _aboutKey = GlobalKey();
+  final GlobalKey _mapKey = GlobalKey();
   final GlobalKey _contactKey = GlobalKey();
 
   String _category = 'All';
@@ -763,6 +863,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                 _shopSection(narrow),
                 const GrowingVine(),
                 _aboutSection(narrow),
+                _mapSection(narrow),
                 const SizedBox(height: 30),
                 _footer(narrow),
               ],
@@ -824,6 +925,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                 _navLink('Home', _goTop),
                 _navLink('Shop', () => _goTo(_shopKey)),
                 _navLink('About', () => _goTo(_aboutKey)),
+                _navLink('Location', () => _goTo(_mapKey)),
                 _navLink('Contact', () => _goTo(_contactKey)),
                 const SizedBox(width: 8),
               ] else
@@ -835,11 +937,13 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                     if (v == 1) _goTo(_shopKey);
                     if (v == 2) _goTo(_aboutKey);
                     if (v == 3) _goTo(_contactKey);
+                    if (v == 4) _goTo(_mapKey);
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 0, child: Text('Home')),
                     PopupMenuItem(value: 1, child: Text('Shop')),
                     PopupMenuItem(value: 2, child: Text('About')),
+                    PopupMenuItem(value: 4, child: Text('Location')),
                     PopupMenuItem(value: 3, child: Text('Contact')),
                   ],
                 ),
@@ -1163,6 +1267,102 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- Map / Location ----------
+  Widget _mapSection(bool narrow) {
+    final mapCard = Container(
+      height: narrow ? 240 : 320,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 18, offset: const Offset(0, 8))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(painter: MapPainter(_anim)),
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(onTap: () => launchExternalUrl(kMapShortLink)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.location_on, color: kBrown),
+            SizedBox(width: 8),
+            Text('Find Us', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kBrown)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const Text('Rapti Nursery & Banaspati Uddhan',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kGreen)),
+        const SizedBox(height: 6),
+        const Text('Dang, Nepal', style: TextStyle(fontSize: 16, color: Colors.black87)),
+        const SizedBox(height: 6),
+        const Text('Open Sun - Sat: 7:00 AM - 6:00 PM', style: TextStyle(color: Colors.black54)),
+        const SizedBox(height: 22),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => launchExternalUrl(kMapShortLink),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                textStyle: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              icon: const Icon(Icons.map),
+              label: const Text('Open in Google Maps'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => launchExternalUrl(kMapDirections),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kGreen,
+                side: const BorderSide(color: kGreen, width: 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                textStyle: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              icon: const Icon(Icons.directions),
+              label: const Text('Get Directions'),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    return Container(
+      key: _mapKey,
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(narrow ? 16 : 32, 40, narrow ? 16 : 32, 10),
+      child: centered(
+        Reveal(
+          child: narrow
+              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [mapCard, const SizedBox(height: 22), details])
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(flex: 6, child: mapCard),
+                    const SizedBox(width: 40),
+                    Expanded(flex: 4, child: details),
+                  ],
+                ),
         ),
       ),
     );
@@ -2030,7 +2230,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   }
 
   void _login() {
-    if (_emailController.text.trim() == kAdminEmail && _passwordController.text.trim() == kAdminPass) {
+    final input = '$kAdminSalt|${_emailController.text.trim().toLowerCase()}|${_passwordController.text.trim()}';
+    if (sha256.convert(utf8.encode(input)).toString() == kAdminHash) {
       adminLoggedIn = true;
       Navigator.pushReplacementNamed(context, '/admin/dashboard');
     } else {
@@ -2127,123 +2328,209 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  void _addNewProductDialog() {
-    final nameCtrl = TextEditingController();
-    String categoryVal = kCategories.first;
-    final priceCtrl = TextEditingController();
-    final stockCtrl = TextEditingController();
-    final careCtrl = TextEditingController();
-    final longDescCtrl = TextEditingController();
-    Uint8List? pickedImageBytes;
+  /// One dialog for both adding a new plant and editing an existing one.
+  void _productDialog({PlantProduct? existing}) {
+    final isEdit = existing != null;
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    String categoryVal = existing?.category ?? kCategories.first;
+    if (!kCategories.contains(categoryVal)) categoryVal = kCategories.first;
+    final priceCtrl = TextEditingController(text: existing != null ? existing.priceNpr.toStringAsFixed(0) : '');
+    final stockCtrl = TextEditingController(text: existing != null ? '${existing.stock}' : '');
+    final careCtrl = TextEditingController(text: existing?.careNote ?? '');
+    final longDescCtrl = TextEditingController(text: existing?.longDescription ?? '');
+    final urlCtrl = TextEditingController(text: (existing != null && existing.imageBytes == null) ? existing.imageUrl : '');
+    Uint8List? pickedImageBytes = existing?.imageBytes;
+    String error = '';
 
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add New Plant Listing'),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 450,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                      controller: nameCtrl,
-                      decoration: const InputDecoration(labelText: 'Plant Name', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: categoryVal,
-                    decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
-                    items: kCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                    onChanged: (val) {
-                      if (val != null) setDialogState(() => categoryVal = val);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                            controller: priceCtrl,
-                            decoration: const InputDecoration(labelText: 'Price (NPR)', border: OutlineInputBorder()),
-                            keyboardType: TextInputType.number),
+        builder: (context, setDialogState) {
+          final url = urlCtrl.text.trim();
+          Widget preview() => ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  width: 90,
+                  height: 90,
+                  child: pickedImageBytes != null
+                      ? Image.memory(pickedImageBytes!, fit: BoxFit.cover)
+                      : (url.isEmpty
+                          ? Container(color: Colors.grey[200], child: const Icon(Icons.image, color: Colors.grey))
+                          : Image.network(url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (c, e, s) => Container(
+                                    color: Colors.grey[200],
+                                    child: const Icon(Icons.broken_image, color: Colors.grey),
+                                  ))),
+                ),
+              );
+
+          return AlertDialog(
+            title: Text(isEdit ? 'Edit Plant Listing' : 'Add New Plant Listing'),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: math.min(450, MediaQuery.of(context).size.width * 0.8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(labelText: 'Plant Name', border: OutlineInputBorder())),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: categoryVal,
+                      decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+                      items: kCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setDialogState(() => categoryVal = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                              controller: priceCtrl,
+                              decoration: const InputDecoration(labelText: 'Price (NPR)', border: OutlineInputBorder()),
+                              keyboardType: TextInputType.number),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                              controller: stockCtrl,
+                              decoration: const InputDecoration(labelText: 'Stock Qty', border: OutlineInputBorder()),
+                              keyboardType: TextInputType.number),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: careCtrl,
+                        decoration: const InputDecoration(labelText: 'Care Notes', border: OutlineInputBorder())),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: longDescCtrl,
+                        decoration: const InputDecoration(labelText: 'Long Description', border: OutlineInputBorder()),
+                        maxLines: 3),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Plant Image', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        preview(),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  final image = await ImagePicker().pickImage(source: ImageSource.gallery);
+                                  if (image != null) {
+                                    final bytes = await image.readAsBytes();
+                                    setDialogState(() => pickedImageBytes = bytes);
+                                  }
+                                },
+                                icon: const Icon(Icons.image),
+                                label: Text(pickedImageBytes != null ? 'Change Image' : 'Select from Device'),
+                              ),
+                              if (pickedImageBytes != null)
+                                TextButton(
+                                  onPressed: () => setDialogState(() => pickedImageBytes = null),
+                                  child: const Text('Remove uploaded image', style: TextStyle(color: Colors.redAccent)),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: urlCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Or Image URL (press Enter to preview)',
+                        border: OutlineInputBorder(),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                            controller: stockCtrl,
-                            decoration: const InputDecoration(labelText: 'Stock Qty', border: OutlineInputBorder()),
-                            keyboardType: TextInputType.number),
-                      ),
+                      onSubmitted: (_) => setDialogState(() {}),
+                    ),
+                    if (error.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(error, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: careCtrl,
-                      decoration: const InputDecoration(labelText: 'Care Notes', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: longDescCtrl,
-                      decoration: const InputDecoration(labelText: 'Long Description', border: OutlineInputBorder()),
-                      maxLines: 2),
-                  const SizedBox(height: 15),
-                  Wrap(
-                    spacing: 15,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          final picker = ImagePicker();
-                          final image = await picker.pickImage(source: ImageSource.gallery);
-                          if (image != null) {
-                            final bytes = await image.readAsBytes();
-                            setDialogState(() => pickedImageBytes = bytes);
-                          }
-                        },
-                        icon: const Icon(Icons.image),
-                        label: const Text('Select Image from Device'),
-                      ),
-                      if (pickedImageBytes != null)
-                        const Text('Image Selected! âœ…', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
-                      else
-                        const Text('No image chosen', style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                if (nameCtrl.text.trim().isEmpty) {
-                  showSnack(context, 'Please enter a plant name.', error: true);
-                  return;
-                }
-                setState(() {
-                  globalProducts.add(PlantProduct(
-                    id: 'new_${DateTime.now().millisecondsSinceEpoch}',
-                    name: nameCtrl.text.trim(),
-                    category: categoryVal,
-                    priceNpr: double.tryParse(priceCtrl.text) ?? 100,
-                    stock: int.tryParse(stockCtrl.text) ?? 10,
-                    careNote: careCtrl.text.trim().isEmpty ? 'Water regularly and keep in good light' : careCtrl.text.trim(),
-                    imageUrl: 'https://images.unsplash.com/photo-1553279768-865429fa0078?q=80&w=800',
-                    imageBytes: pickedImageBytes,
-                    longDescription: longDescCtrl.text.trim().isNotEmpty
-                        ? longDescCtrl.text.trim()
-                        : 'A healthy plant ready for your garden.',
-                  ));
-                });
-                Navigator.pop(dialogContext);
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white),
-              child: const Text('Save Plant'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () {
+                  final name = nameCtrl.text.trim();
+                  final price = double.tryParse(priceCtrl.text.trim());
+                  final stock = int.tryParse(stockCtrl.text.trim());
+                  if (name.isEmpty) {
+                    setDialogState(() => error = 'Please enter a plant name.');
+                    return;
+                  }
+                  if (price == null || price < 0) {
+                    setDialogState(() => error = 'Please enter a valid price.');
+                    return;
+                  }
+                  if (stock == null || stock < 0) {
+                    setDialogState(() => error = 'Please enter a valid stock quantity.');
+                    return;
+                  }
+                  const defaultImage = 'https://images.unsplash.com/photo-1553279768-865429fa0078?q=80&w=800';
+                  final care = careCtrl.text.trim().isEmpty ? 'Water regularly and keep in good light' : careCtrl.text.trim();
+                  final desc = longDescCtrl.text.trim().isEmpty ? 'A healthy plant ready for your garden.' : longDescCtrl.text.trim();
+                  final newUrl = urlCtrl.text.trim();
+
+                  setState(() {
+                    if (isEdit) {
+                      existing.name = name;
+                      existing.category = categoryVal;
+                      existing.priceNpr = price;
+                      existing.stock = stock;
+                      existing.careNote = care;
+                      existing.longDescription = desc;
+                      existing.imageBytes = pickedImageBytes;
+                      if (pickedImageBytes == null) {
+                        existing.imageUrl = newUrl.isNotEmpty ? newUrl : (existing.imageUrl.isNotEmpty ? existing.imageUrl : defaultImage);
+                      }
+                    } else {
+                      globalProducts.add(PlantProduct(
+                        id: 'new_${DateTime.now().millisecondsSinceEpoch}',
+                        name: name,
+                        category: categoryVal,
+                        priceNpr: price,
+                        stock: stock,
+                        careNote: care,
+                        imageUrl: newUrl.isNotEmpty ? newUrl : defaultImage,
+                        imageBytes: pickedImageBytes,
+                        longDescription: desc,
+                      ));
+                    }
+                  });
+
+                  // Keep any carts valid after price/stock changes
+                  globalCart.removeWhere((c) => c.product.stock <= 0);
+                  for (final c in globalCart) {
+                    if (c.quantity > c.product.stock) c.quantity = c.product.stock;
+                  }
+                  syncCart();
+                  Navigator.pop(dialogContext);
+                  showSnack(this.context, isEdit ? 'Saved changes to $name ✅' : 'Added $name to the store 🌿');
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white),
+                child: Text(isEdit ? 'Save Changes' : 'Save Plant'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2272,47 +2559,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  Widget _stat(String label, String value, Color color, IconData icon) => SizedBox(
-        width: 260,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.96, end: 1),
-          duration: const Duration(milliseconds: 450),
-          curve: Curves.easeOutCubic,
-          builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withOpacity(0.12)),
-              boxShadow: [BoxShadow(color: color.withOpacity(0.08), blurRadius: 22, offset: const Offset(0, 8))],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(15)),
-                  child: Icon(icon, color: color),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label, style: const TextStyle(color: Color(0xFF718071), fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 5),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: SlideTransition(
-                          position: Tween<Offset>(begin: const Offset(0, 0.18), end: Offset.zero).animate(animation), child: child)),
-                        child: Text(value, key: ValueKey(value), style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800, color: color)),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+  Widget _stat(String label, String value, Color color) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: color)),
+            ],
           ),
         ),
       );
@@ -2324,12 +2585,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: kCream,
-        foregroundColor: kDeepGreen,
-        elevation: 0,
-        title: const Text('Rapti Nursery', style: TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: kBrown,
+        foregroundColor: Colors.white,
+        title: const Text('Owner Dashboard - Rapti Nursery'),
         actions: [
-          const Padding(padding: EdgeInsets.only(right: 8), child: Center(child: Text('OWNER', style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: kGreen)))),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
@@ -2341,7 +2600,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addNewProductDialog,
+        onPressed: () => _productDialog(),
         backgroundColor: kGreen,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
@@ -2353,50 +2612,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(narrow ? 20 : 26),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFEAF2E5), Color(0xFFF8F7EF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('A little care goes a long way', style: TextStyle(color: kDeepGreen, fontSize: narrow ? 22 : 27, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 6),
-                  const Text('Keep your nursery thriving. Review stock and update your plant collection.', style: TextStyle(color: Color(0xFF617261), height: 1.45)),
-                ]),
+              Row(
+                children: [
+                  _stat('Total Varieties', '${globalProducts.length}', kGreen),
+                  const SizedBox(width: 16),
+                  _stat('Total Stock Units', '$totalStock', kBrown),
+                ],
               ),
-              const SizedBox(height: 18),
-              Wrap(spacing: 14, runSpacing: 14, children: [
-                _stat('Plant varieties', '${globalProducts.length}', kGreen, Icons.spa_outlined),
-                _stat('Units in stock', '$totalStock', kBrown, Icons.inventory_2_outlined),
-              ]),
-              const SizedBox(height: 28),
-              Row(children: [
-                const Expanded(child: Text('Your plants', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: kDeepGreen))),
-                Text('${globalProducts.length} listings', style: const TextStyle(color: Color(0xFF718071), fontWeight: FontWeight.w600)),
-              ]),
-              const SizedBox(height: 13),
+              const SizedBox(height: 26),
+              const Text('Manage Store Inventory',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kBrown)),
+              const SizedBox(height: 15),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.only(bottom: 90),
                   itemCount: globalProducts.length,
                   itemBuilder: (context, index) {
                     final plant = globalProducts[index];
-                    final stockColor = plant.stock == 0 ? Colors.red.shade700 : plant.stock < 5 ? Colors.orange.shade800 : kGreen;
-                    return TweenAnimationBuilder<double>(
-                      key: ValueKey(plant.id),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: Duration(milliseconds: 280 + (math.min(index, 5) * 55)),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, child) => Opacity(opacity: value, child: Transform.translate(offset: Offset(0, 12 * (1 - value)), child: child)),
-                      child: Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: Color(0xFFE8EDE5))),
+                    return Card(
+                      elevation: 2,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: Padding(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(12),
                         child: Row(
                           children: [
                             ClipRRect(borderRadius: BorderRadius.circular(8), child: plantImage(plant, width: 64, height: 64)),
@@ -2405,20 +2643,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(plant.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF243B25))),
+                                  Text(plant.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                   const SizedBox(height: 4),
-                                  Text('${plant.category}  ?  ${rs(plant.priceNpr)}',
-                                      style: const TextStyle(color: Color(0xFF718071), fontSize: 13)),
+                                  Text('${plant.category} | ${rs(plant.priceNpr)}',
+                                      style: const TextStyle(color: Colors.black54, fontSize: 13)),
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      Text(plant.stock == 0 ? 'Out of stock' : plant.stock < 5 ? 'Low stock' : 'In stock', style: TextStyle(fontSize: 12, color: stockColor, fontWeight: FontWeight.w700)),
+                                      const Text('Stock:', style: TextStyle(fontSize: 13)),
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
                                         icon: const Icon(Icons.remove_circle_outline, size: 20),
                                         onPressed: plant.stock > 0 ? () => setState(() => plant.stock--) : null,
                                       ),
-                                      AnimatedSwitcher(duration: const Duration(milliseconds: 180), child: Text('${plant.stock}', key: ValueKey(plant.stock), style: TextStyle(fontWeight: FontWeight.w800, color: stockColor))),
+                                      Text('${plant.stock}', style: const TextStyle(fontWeight: FontWeight.bold)),
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
                                         icon: const Icon(Icons.add_circle_outline, size: 20),
@@ -2429,15 +2667,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ],
                               ),
                             ),
-                            IconButton(
-                              style: IconButton.styleFrom(backgroundColor: const Color(0xFFFFF1EF)),
-                              icon: const Icon(Icons.delete_outline, color: Color(0xFFB34B3D)),
-                              tooltip: 'Delete',
-                              onPressed: () => _confirmDelete(index),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: kGreen),
+                                  tooltip: 'Edit',
+                                  onPressed: () => _productDialog(existing: plant),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  tooltip: 'Delete',
+                                  onPressed: () => _confirmDelete(index),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ),
                       ),
                     );
                   },

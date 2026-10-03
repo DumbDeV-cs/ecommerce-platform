@@ -28,6 +28,7 @@ const List<String> kCategories = ['Fruit Saplings', 'Indoor Plants', 'Seeds', 'F
 
 /// Cart badge + scroll position are shared so any screen can react to them.
 final ValueNotifier<int> cartCount = ValueNotifier<int>(0);
+final Set<String> favoriteProductIds = <String>{};
 final ValueNotifier<double> scrollTick = ValueNotifier<double>(0);
 bool adminLoggedIn = false;
 
@@ -769,6 +770,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
   late final AnimationController _anim = AnimationController(vsync: this, duration: const Duration(seconds: 60))..repeat();
   final ScrollController _scroll = ScrollController();
   final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   final GlobalKey _shopKey = GlobalKey();
   final GlobalKey _aboutKey = GlobalKey();
   final GlobalKey _mapKey = GlobalKey();
@@ -778,6 +780,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
   String _query = '';
   bool _solidNav = false;
   bool _showTop = false;
+  bool _showFavorites = false;
 
   @override
   void initState() {
@@ -802,6 +805,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
   void dispose() {
     _scroll.dispose();
     _searchCtrl.dispose();
+    _searchFocus.dispose();
     _anim.dispose();
     super.dispose();
   }
@@ -815,6 +819,13 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
 
   void _goTop() =>
       _scroll.animateTo(0, duration: const Duration(milliseconds: 800), curve: Curves.easeInOutCubic);
+
+  void _goToSearch() {
+    _goTo(_shopKey);
+    Future.delayed(const Duration(milliseconds: 850), () {
+      if (mounted) _searchFocus.requestFocus();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -947,6 +958,11 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                     PopupMenuItem(value: 3, child: Text('Contact')),
                   ],
                 ),
+              IconButton(
+                tooltip: 'Search plants',
+                icon: const Icon(Icons.search, color: Colors.white),
+                onPressed: _goToSearch,
+              ),
               const CartButton(),
               if (wide)
                 Container(
@@ -1097,9 +1113,16 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
   // ---------- Shop ----------
   Widget _shopSection(bool narrow) {
     final q = _query.trim().toLowerCase();
-    final list = globalProducts
-        .where((p) => (_category == 'All' || p.category == _category) && (q.isEmpty || p.name.toLowerCase().contains(q)))
-        .toList();
+    final list = globalProducts.where((p) {
+      final matchesCategory = _category == 'All' || p.category == _category;
+      final matchesQuery = q.isEmpty ||
+          p.name.toLowerCase().contains(q) ||
+          p.category.toLowerCase().contains(q) ||
+          p.careNote.toLowerCase().contains(q) ||
+          p.longDescription.toLowerCase().contains(q);
+      final matchesFavorites = !_showFavorites || favoriteProductIds.contains(p.id);
+      return matchesCategory && matchesQuery && matchesFavorites;
+    }).toList();
     final pad = narrow ? 16.0 : 32.0;
     final cats = ['All', ...kCategories];
 
@@ -1129,6 +1152,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 480),
                 child: TextField(
+                  focusNode: _searchFocus,
                   controller: _searchCtrl,
                   onChanged: (v) => setState(() => _query = v),
                   decoration: InputDecoration(
@@ -1157,21 +1181,37 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: cats.map((cat) {
-                    final sel = _category == cat;
-                    return Padding(
+                  children: [
+                    ...cats.map((cat) {
+                      final sel = _category == cat;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: ChoiceChip(
+                          label: Text(cat),
+                          selected: sel,
+                          showCheckmark: false,
+                          selectedColor: kGreen,
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(color: sel ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+                          onSelected: (_) => setState(() => _category = cat),
+                        ),
+                      );
+                    }),
+                    Padding(
                       padding: const EdgeInsets.only(right: 10),
-                      child: ChoiceChip(
-                        label: Text(cat),
-                        selected: sel,
+                      child: FilterChip(
+                        avatar: Icon(_showFavorites ? Icons.favorite : Icons.favorite_border, size: 18,
+                            color: _showFavorites ? Colors.white : Colors.pink.shade400),
+                        label: Text('Favorites (${favoriteProductIds.length})'),
+                        selected: _showFavorites,
                         showCheckmark: false,
                         selectedColor: kGreen,
                         backgroundColor: Colors.white,
-                        labelStyle: TextStyle(color: sel ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
-                        onSelected: (_) => setState(() => _category = cat),
+                        labelStyle: TextStyle(color: _showFavorites ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+                        onSelected: (selected) => setState(() => _showFavorites = selected),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1210,7 +1250,11 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                   key: ValueKey(list[i].id),
                   delayMs: (i % 4) * 90,
                   offset: const Offset(0, 40),
-                  child: PlantCard(plant: list[i]),
+                  child: PlantCard(
+                    plant: list[i],
+                    isFavorite: favoriteProductIds.contains(list[i].id),
+                    onFavoriteChanged: () => setState(() {}),
+                  ),
                 ),
               ),
           ],
@@ -1492,7 +1536,9 @@ class _InfoTile extends StatelessWidget {
 // ==================== PLANT CARD ====================
 class PlantCard extends StatefulWidget {
   final PlantProduct plant;
-  const PlantCard({super.key, required this.plant});
+  final bool isFavorite;
+  final VoidCallback? onFavoriteChanged;
+  const PlantCard({super.key, required this.plant, this.isFavorite = false, this.onFavoriteChanged});
 
   @override
   State<PlantCard> createState() => _PlantCardState();
@@ -1555,6 +1601,29 @@ class _PlantCardState extends State<PlantCard> {
                           duration: const Duration(milliseconds: 500),
                           curve: Curves.easeOut,
                           child: plantImage(p),
+                        ),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Material(
+                          color: Colors.white.withOpacity(0.94),
+                          shape: const CircleBorder(),
+                          child: IconButton(
+                            tooltip: widget.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(widget.isFavorite ? Icons.favorite : Icons.favorite_border,
+                                color: widget.isFavorite ? Colors.pink.shade500 : kGreen, size: 21),
+                            onPressed: () {
+                              if (widget.isFavorite) {
+                                favoriteProductIds.remove(p.id);
+                              } else {
+                                favoriteProductIds.add(p.id);
+                              }
+                              setState(() {});
+                              widget.onFavoriteChanged?.call();
+                            },
+                          ),
                         ),
                       ),
                       if (out)
@@ -2553,6 +2622,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (ok == true) {
       setState(() {
         globalCart.removeWhere((c) => c.product.id == plant.id);
+        favoriteProductIds.remove(plant.id);
         globalProducts.removeAt(index);
       });
       syncCart();

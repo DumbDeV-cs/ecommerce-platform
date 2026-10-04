@@ -1777,16 +1777,21 @@ class _PlantCardState extends State<PlantCard> {
                           child: IconButton(
                             tooltip: widget.isFavorite ? 'Remove from favorites' : 'Add to favorites',
                             visualDensity: VisualDensity.compact,
-                            icon: Icon(widget.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: widget.isFavorite ? Colors.pink.shade500 : kGreen, size: 21),
+                            icon: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 320),
+                              transitionBuilder: (child, animation) => ScaleTransition(
+                                scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                                child: FadeTransition(opacity: animation, child: child),
+                              ),
+                              child: Icon(
+                                widget.isFavorite ? Icons.favorite : Icons.favorite_border,
+                                key: ValueKey(widget.isFavorite),
+                                color: widget.isFavorite ? Colors.pink.shade500 : kGreen,
+                                size: 21,
+                              ),
+                            ),
                             onPressed: () {
-                              if (widget.isFavorite) {
-                                favoriteProductIds.remove(p.id);
-                              } else {
-                                favoriteProductIds.add(p.id);
-                              }
                               toggleFavorite(p.id);
-                              setState(() {});
                               widget.onFavoriteChanged?.call();
                             },
                           ),

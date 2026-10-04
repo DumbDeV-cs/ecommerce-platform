@@ -29,6 +29,17 @@ const List<String> kCategories = ['Fruit Saplings', 'Indoor Plants', 'Seeds', 'F
 /// Cart badge + scroll position are shared so any screen can react to them.
 final ValueNotifier<int> cartCount = ValueNotifier<int>(0);
 final Set<String> favoriteProductIds = <String>{};
+final ValueNotifier<int> favoriteCount = ValueNotifier<int>(0);
+VoidCallback? openFavorites;
+
+void toggleFavorite(String productId) {
+  if (!favoriteProductIds.add(productId)) favoriteProductIds.remove(productId);
+  favoriteCount.value = favoriteProductIds.length;
+}
+
+void removeFavorite(String productId) {
+  if (favoriteProductIds.remove(productId)) favoriteCount.value = favoriteProductIds.length;
+}
 final ValueNotifier<double> scrollTick = ValueNotifier<double>(0);
 bool adminLoggedIn = false;
 
@@ -717,6 +728,46 @@ class GrowingVine extends StatelessWidget {
   }
 }
 
+class WishlistButton extends StatelessWidget {
+  const WishlistButton({super.key});
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+        valueListenable: favoriteCount,
+        builder: (context, count, _) => Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              tooltip: 'Favorite plants',
+              icon: const Icon(Icons.favorite_border, color: Colors.white),
+              onPressed: () => openFavorites?.call(),
+            ),
+            if (count > 0)
+              Positioned(
+                right: 2,
+                top: 2,
+                child: IgnorePointer(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                      child: child,
+                    ),
+                    child: Container(
+                      key: ValueKey(count),
+                      padding: const EdgeInsets.all(5),
+                      decoration: const BoxDecoration(color: Color(0xFFFF7893), shape: BoxShape.circle),
+                      child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+}
+
 class CartButton extends StatelessWidget {
   final Color color;
   const CartButton({super.key, this.color = Colors.white});
@@ -781,10 +832,12 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
   bool _solidNav = false;
   bool _showTop = false;
   bool _showFavorites = false;
+  int _sortOrder = 0;
 
   @override
   void initState() {
     super.initState();
+    openFavorites = _goToFavorites;
     _scroll.addListener(_onScroll);
   }
 
@@ -803,6 +856,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
 
   @override
   void dispose() {
+    openFavorites = null;
     _scroll.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
@@ -822,9 +876,19 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
 
   void _goToSearch() {
     _goTo(_shopKey);
-    Future.delayed(const Duration(milliseconds: 850), () {
+    Future.delayed(const Duration(milliseconds: 650), () {
       if (mounted) _searchFocus.requestFocus();
     });
+  }
+
+  void _goToFavorites() {
+    _searchCtrl.clear();
+    setState(() {
+      _query = '';
+      _category = 'All';
+      _showFavorites = true;
+    });
+    _goTo(_shopKey);
   }
 
   @override
@@ -963,6 +1027,7 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                 icon: const Icon(Icons.search, color: Colors.white),
                 onPressed: _goToSearch,
               ),
+              const WishlistButton(),
               const CartButton(),
               if (wide)
                 Container(
@@ -1123,6 +1188,13 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
       final matchesFavorites = !_showFavorites || favoriteProductIds.contains(p.id);
       return matchesCategory && matchesQuery && matchesFavorites;
     }).toList();
+
+    if (_sortOrder == 1) {
+      list.sort((a, b) => a.priceNpr.compareTo(b.priceNpr));
+    } else if (_sortOrder == 2) {
+      list.sort((a, b) => b.priceNpr.compareTo(a.priceNpr));
+    }
+
     final pad = narrow ? 16.0 : 32.0;
     final cats = ['All', ...kCategories];
 
@@ -1154,13 +1226,14 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                 child: TextField(
                   focusNode: _searchFocus,
                   controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _query = v),
+                  onChanged: (value) => setState(() => _query = value),
                   decoration: InputDecoration(
                     hintText: 'Search plants…',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _query.isEmpty
                         ? null
                         : IconButton(
+                            tooltip: 'Clear search',
                             icon: const Icon(Icons.close),
                             onPressed: () {
                               _searchCtrl.clear();
@@ -1183,16 +1256,19 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                 child: Row(
                   children: [
                     ...cats.map((cat) {
-                      final sel = _category == cat;
+                      final selected = _category == cat;
                       return Padding(
                         padding: const EdgeInsets.only(right: 10),
                         child: ChoiceChip(
                           label: Text(cat),
-                          selected: sel,
+                          selected: selected,
                           showCheckmark: false,
                           selectedColor: kGreen,
                           backgroundColor: Colors.white,
-                          labelStyle: TextStyle(color: sel ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+                          labelStyle: TextStyle(
+                            color: selected ? Colors.white : Colors.black87,
+                            fontWeight: FontWeight.bold,
+                          ),
                           onSelected: (_) => setState(() => _category = cat),
                         ),
                       );
@@ -1200,14 +1276,23 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
                     Padding(
                       padding: const EdgeInsets.only(right: 10),
                       child: FilterChip(
-                        avatar: Icon(_showFavorites ? Icons.favorite : Icons.favorite_border, size: 18,
-                            color: _showFavorites ? Colors.white : Colors.pink.shade400),
-                        label: Text('Favorites (${favoriteProductIds.length})'),
+                        avatar: Icon(
+                          _showFavorites ? Icons.favorite : Icons.favorite_border,
+                          size: 18,
+                          color: _showFavorites ? Colors.white : Colors.pink.shade400,
+                        ),
+                        label: ValueListenableBuilder<int>(
+                          valueListenable: favoriteCount,
+                          builder: (context, count, _) => Text('Favorites ($count)'),
+                        ),
                         selected: _showFavorites,
                         showCheckmark: false,
                         selectedColor: kGreen,
                         backgroundColor: Colors.white,
-                        labelStyle: TextStyle(color: _showFavorites ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+                        labelStyle: TextStyle(
+                          color: _showFavorites ? Colors.white : Colors.black87,
+                          fontWeight: FontWeight.bold,
+                        ),
                         onSelected: (selected) => setState(() => _showFavorites = selected),
                       ),
                     ),
@@ -1216,47 +1301,127 @@ class _StorefrontScreenState extends State<StorefrontScreen> with SingleTickerPr
               ),
             ),
             const SizedBox(height: 22),
-            Text('$_category (${list.length})',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kBrown)),
+            Row(
+              children: [
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: Text('$_category (${list.length})',
+                        key: ValueKey('$_category-${list.length}'),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kBrown)),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _sortOrder,
+                      icon: const Icon(Icons.keyboard_arrow_down, color: kGreen),
+                      style: const TextStyle(color: kDeepGreen, fontSize: 13, fontWeight: FontWeight.w600),
+                      items: const [
+                        DropdownMenuItem(value: 0, child: Text('Featured')),
+                        DropdownMenuItem(value: 1, child: Text('Price: Low to High')),
+                        DropdownMenuItem(value: 2, child: Text('Price: High to Low')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => _sortOrder = value);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             const Text('Tap a plant for details & quick buy', style: TextStyle(color: Colors.grey, fontSize: 13)),
             const SizedBox(height: 16),
-            if (list.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 60),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.search_off, size: 56, color: Colors.grey),
-                      SizedBox(height: 10),
-                      Text('No plants found. Try a different search or category.',
-                          style: TextStyle(color: Colors.grey, fontSize: 16), textAlign: TextAlign.center),
-                    ],
-                  ),
-                ),
-              )
-            else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 300,
-                  mainAxisExtent: 390,
-                  crossAxisSpacing: 18,
-                  mainAxisSpacing: 18,
-                ),
-                itemCount: list.length,
-                itemBuilder: (context, i) => Reveal(
-                  key: ValueKey(list[i].id),
-                  delayMs: (i % 4) * 90,
-                  offset: const Offset(0, 40),
-                  child: PlantCard(
-                    plant: list[i],
-                    isFavorite: favoriteProductIds.contains(list[i].id),
-                    onFavoriteChanged: () => setState(() {}),
-                  ),
-                ),
-              ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 420),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: list.isEmpty
+                  ? TweenAnimationBuilder<double>(
+                      key: const ValueKey('empty-search'),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOutBack,
+                      builder: (context, value, child) => Opacity(
+                        opacity: value.clamp(0.0, 1.0).toDouble(),
+                        child: Transform.scale(scale: 0.92 + (0.08 * value), child: child),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 42),
+                        child: Center(
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            padding: const EdgeInsets.all(28),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(color: kGreen.withOpacity(0.08), blurRadius: 24, offset: const Offset(0, 8)),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 76,
+                                  height: 76,
+                                  decoration: BoxDecoration(color: kGreen.withOpacity(0.1), shape: BoxShape.circle),
+                                  child: const Icon(Icons.manage_search_rounded, size: 40, color: kGreen),
+                                ),
+                                const SizedBox(height: 18),
+                                const Text('No plants found',
+                                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kDeepGreen)),
+                                const SizedBox(height: 8),
+                                const Text('Try another search or adjust your category and favorites filters.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.black54, height: 1.45)),
+                                const SizedBox(height: 18),
+                                FilledButton.icon(
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    setState(() {
+                                      _query = '';
+                                      _category = 'All';
+                                      _showFavorites = false;
+                                      _sortOrder = 0;
+                                    });
+                                  },
+                                  style: FilledButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white),
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Reset search and filters'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      key: const ValueKey('plant-grid'),
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 300,
+                        mainAxisExtent: 390,
+                        crossAxisSpacing: 18,
+                        mainAxisSpacing: 18,
+                      ),
+                      itemCount: list.length,
+                      itemBuilder: (context, i) => Reveal(
+                        key: ValueKey(list[i].id),
+                        delayMs: (i % 4) * 90,
+                        offset: const Offset(0, 40),
+                        child: PlantCard(
+                          plant: list[i],
+                          isFavorite: favoriteProductIds.contains(list[i].id),
+                          onFavoriteChanged: () => setState(() {}),
+                        ),
+                      ),
+                    ),
+            ),
           ],
         ),
       ),
@@ -1620,6 +1785,7 @@ class _PlantCardState extends State<PlantCard> {
                               } else {
                                 favoriteProductIds.add(p.id);
                               }
+                              toggleFavorite(p.id);
                               setState(() {});
                               widget.onFavoriteChanged?.call();
                             },
@@ -2623,6 +2789,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       setState(() {
         globalCart.removeWhere((c) => c.product.id == plant.id);
         favoriteProductIds.remove(plant.id);
+        removeFavorite(plant.id);
         globalProducts.removeAt(index);
       });
       syncCart();
